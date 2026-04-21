@@ -1,48 +1,117 @@
-// SPDX-FileCopyrightText: 2025 Liz Clark for Adafruit Industries
-//
-// SPDX-License-Identifier: MIT
-
 #include <Adafruit_NeoPixel.h>
 
-// #define BLOCK_1 32
-#define BLOCK_2 33
-#define NUM_PIXELS 60
+constexpr uint MINUTES_STRIP_PIN = 32;
+constexpr uint SECONDS_STRIP_PIN = 33;
 
-// Adafruit_NeoPixel STRIP_1(NUM_PIXELS, BLOCK_1, NEO_GRB + NEO_KHZ800);
-Adafruit_NeoPixel STRIP_2(NUM_PIXELS, BLOCK_2, NEO_GRB + NEO_KHZ800);
+constexpr uint MINUTES_STRIP_COUNT = 8;
+constexpr uint SECONDS_STRIP_COUNT = 60;
+
+constexpr uint MINUTES_STRIP_BRIGHT = 5;
+constexpr uint SECONDS_STRIP_BRIGHT = 5;
+
+Adafruit_NeoPixel minStrip(
+  MINUTES_STRIP_COUNT, MINUTES_STRIP_PIN, NEO_GRB + NEO_KHZ800
+);
+Adafruit_NeoPixel secStrip(
+  SECONDS_STRIP_COUNT, SECONDS_STRIP_PIN, NEO_GRB + NEO_KHZ800
+);
+
+ulong now;
+uint waitTime = 1000;
+uint lastUpdate = 0;
+uint switchTime = 25;
+
+bool updateMinutes = false;
+bool minForward = false;
+bool secForward = true;
+uint secPos;
+uint prevSecPos;
+uint minPos;
+uint prevMinPos;
+
+uint hueBase = 0;
 
 void setup() {
   Serial.begin(9600);
-  delay(1000);
-  Serial.println("Starting up");
+  while (!Serial) {
+    delay(10);
+  }
+  Serial.println("Setting up");
 
-  // STRIP_1.begin();
-  STRIP_2.begin();
-  // STRIP_1.setBrightness(25);
-  STRIP_2.setBrightness(50);
+  minStrip.begin();
+  minStrip.setBrightness(MINUTES_STRIP_BRIGHT);
+  minStrip.fill();
+  minStrip.show();
+
+  secStrip.begin();
+  secStrip.setBrightness(SECONDS_STRIP_BRIGHT);
+  secStrip.fill();
+  secStrip.show();
+
+  if (secForward) {
+    secPos = -1;
+    prevSecPos = secStrip.numPixels() - 1;
+  } else {
+    secPos = secStrip.numPixels() - 1;
+    prevSecPos = 0;
+  }
+  if (minForward) {
+    minPos = 0;
+    prevMinPos = minStrip.numPixels() - 1;
+  } else {
+    minPos = minStrip.numPixels() - 1;
+    prevMinPos = 0;
+  }
 }
 
-// uint16_t pixelHue_1 = 0;
-uint16_t pixelHue_2 = 256;
-
-int count = 0;
 void loop() {
-  Serial.print("Loop: ");
-  Serial.println(count++);
+  now = millis();
 
-  // pixelHue_1 += 256;
-  // for(uint i=0; i<STRIP_1.numPixels(); i++) {
-  //     int hue_1 = pixelHue_1 + (i * 65536L / STRIP_1.numPixels());
-  //     STRIP_1.setPixelColor(i, STRIP_1.gamma32(STRIP_1.ColorHSV(hue_1)));
-  //   }
-  // STRIP_1.show();
+  if (now - lastUpdate > waitTime) {
+    lastUpdate = now;
+    prevSecPos = secPos;
+    if (secForward) {
+      secPos += 1;
+      if (secPos >= secStrip.numPixels()) {
+        secPos = 0;
+        updateMinutes = true;
+      }
+    } else {
+      secPos -= 1;
+      if (secPos <= 0) {
+        secPos = secStrip.numPixels() - 1;
+        updateMinutes = true;
+      }
+    }
+    if (updateMinutes) {
+      updateMinutes = false;
+      prevMinPos = minPos;
+      if (minForward) {
+        minPos += 1;
+        if (minPos >= minStrip.numPixels()) {
+          minPos = 0;
+        }
+      } else {
+        minPos -= 1;
+        if (minPos <= 0) { minPos = minStrip.numPixels() - 1; }
+      }
+    }
 
-  pixelHue_2 -= 256;
-  for(int i=STRIP_2.numPixels(); i>-1; i--) {
-    int hue_2 = pixelHue_2 + (i * 65536L / STRIP_2.numPixels());
-    STRIP_2.setPixelColor(i, STRIP_2.gamma32(STRIP_2.ColorHSV(hue_2)));
+    hueBase += 256;
+    const uint secHue = hueBase + secPos * 65536 / minStrip.numPixels();
+    const uint color = Adafruit_NeoPixel::gamma32(
+      Adafruit_NeoPixel::ColorHSV(secHue)
+    );
+    secStrip.setPixelColor(secPos, color);
+    secStrip.show();
+    minStrip.setPixelColor(minPos, color);
+    minStrip.show();
+
+    delay(switchTime);
+
+    secStrip.setPixelColor(prevSecPos, 0);
+    secStrip.show();
+    minStrip.setPixelColor(prevMinPos, 0);
+    minStrip.show();
   }
-  STRIP_2.show();
-
-  delay(10);
 }
