@@ -24,10 +24,10 @@ uint switchTime = 25;
 bool updateMinutes = false;
 bool minForward = false;
 bool secForward = true;
-uint secPos;
-uint prevSecPos;
-uint minPos;
-uint prevMinPos;
+int secPos;
+int prevSecPos;
+int minPos;
+int prevMinPos;
 
 uint hueBase = 0;
 
@@ -78,11 +78,12 @@ void loop() {
       }
     } else {
       secPos -= 1;
-      if (secPos <= 0) {
+      if (secPos < 0) {
         secPos = secStrip.numPixels() - 1;
         updateMinutes = true;
       }
     }
+
     if (updateMinutes) {
       updateMinutes = false;
       prevMinPos = minPos;
@@ -93,7 +94,9 @@ void loop() {
         }
       } else {
         minPos -= 1;
-        if (minPos <= 0) { minPos = minStrip.numPixels() - 1; }
+        if (minPos < 0) {
+          minPos = minStrip.numPixels() - 1;
+        }
       }
     }
 
