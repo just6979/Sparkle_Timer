@@ -29,7 +29,7 @@ int prevSecPos;
 int minPos;
 int prevMinPos;
 
-bool fill = true;
+bool fill = false;
 
 uint hueBase = 0;
 
