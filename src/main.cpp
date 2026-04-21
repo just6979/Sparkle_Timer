@@ -29,6 +29,8 @@ int prevSecPos;
 int minPos;
 int prevMinPos;
 
+bool fill = true;
+
 uint hueBase = 0;
 
 void setup() {
@@ -74,12 +76,14 @@ void loop() {
       secPos += 1;
       if (secPos >= secStrip.numPixels()) {
         secPos = 0;
+        secStrip.clear();
         updateMinutes = true;
       }
     } else {
       secPos -= 1;
       if (secPos < 0) {
         secPos = secStrip.numPixels() - 1;
+        secStrip.clear();
         updateMinutes = true;
       }
     }
@@ -91,11 +95,13 @@ void loop() {
         minPos += 1;
         if (minPos >= minStrip.numPixels()) {
           minPos = 0;
+          minStrip.clear();
         }
       } else {
         minPos -= 1;
         if (minPos < 0) {
           minPos = minStrip.numPixels() - 1;
+          minStrip.clear();
         }
       }
     }
@@ -110,11 +116,12 @@ void loop() {
     minStrip.setPixelColor(minPos, color);
     minStrip.show();
 
-    delay(switchTime);
-
-    secStrip.setPixelColor(prevSecPos, 0);
-    secStrip.show();
-    minStrip.setPixelColor(prevMinPos, 0);
-    minStrip.show();
+    if (!fill) {
+      delay(switchTime);
+      secStrip.setPixelColor(prevSecPos, 0);
+      secStrip.show();
+      minStrip.setPixelColor(prevMinPos, 0);
+      minStrip.show();
+    }
   }
 }
