@@ -1,10 +1,42 @@
 #include <Adafruit_NeoPixel.h>
 
+// sets pixel count and direction for some strips/matrices used in testing
+// #define FULL_MODE
+// #define QUAD_MODE
+#define SMALL_MODE
+
+// makes seconds strip complete in a single second, for testing
+#define FAST_MODE
+
+#ifdef FULL_MODE
+constexpr uint MINUTES_STRIP_COUNT = 60;
+constexpr uint SECONDS_STRIP_COUNT = 60;
+constexpr bool MINUTES_FORWARD = true;
+constexpr bool SECONDS_FORWARD = true;
+#else
+#ifdef QUAD_MODE
+constexpr uint MINUTES_STRIP_COUNT = 60;
+constexpr uint SECONDS_STRIP_COUNT = 60;
+constexpr bool MINUTES_FORWARD = true;
+constexpr bool SECONDS_FORWARD = true;
+#else
+#ifdef SMALL_MODE
+constexpr uint MINUTES_STRIP_COUNT = 8;
+constexpr uint SECONDS_STRIP_COUNT = 8;
+constexpr bool MINUTES_FORWARD = false;
+constexpr bool SECONDS_FORWARD = false;
+#endif
+#endif
+#endif
+
+#ifdef FAST_MODE
+constexpr uint WAIT_TIME = 1000 / SECONDS_STRIP_COUNT;
+#else
+constexpr uint WAIT_TIME = 1000;
+#endif
+
 constexpr uint MINUTES_STRIP_PIN = 32;
 constexpr uint SECONDS_STRIP_PIN = 33;
-
-constexpr uint MINUTES_STRIP_COUNT = 8;
-constexpr uint SECONDS_STRIP_COUNT = 60;
 
 constexpr uint MINUTES_STRIP_BRIGHT = 5;
 constexpr uint SECONDS_STRIP_BRIGHT = 5;
@@ -17,13 +49,10 @@ Adafruit_NeoPixel secStrip(
 );
 
 ulong now;
-uint waitTime = 1000;
 uint lastUpdate = 0;
 uint switchTime = 25;
 
 bool updateMinutes = false;
-bool minForward = false;
-bool secForward = true;
 int secPos;
 int prevSecPos;
 int minPos;
@@ -50,14 +79,14 @@ void setup() {
   secStrip.fill();
   secStrip.show();
 
-  if (secForward) {
+  if (SECONDS_FORWARD) {
     secPos = -1;
     prevSecPos = secStrip.numPixels() - 1;
   } else {
     secPos = secStrip.numPixels() - 1;
     prevSecPos = 0;
   }
-  if (minForward) {
+  if (MINUTES_FORWARD) {
     minPos = 0;
     prevMinPos = minStrip.numPixels() - 1;
   } else {
@@ -69,10 +98,10 @@ void setup() {
 void loop() {
   now = millis();
 
-  if (now - lastUpdate > waitTime) {
+  if (now - lastUpdate > WAIT_TIME) {
     lastUpdate = now;
     prevSecPos = secPos;
-    if (secForward) {
+    if (SECONDS_FORWARD) {
       secPos += 1;
       if (secPos >= secStrip.numPixels()) {
         secPos = 0;
@@ -91,7 +120,7 @@ void loop() {
     if (updateMinutes) {
       updateMinutes = false;
       prevMinPos = minPos;
-      if (minForward) {
+      if (MINUTES_FORWARD) {
         minPos += 1;
         if (minPos >= minStrip.numPixels()) {
           minPos = 0;
