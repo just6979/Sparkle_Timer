@@ -6,7 +6,7 @@
 #define SMALL_MODE
 
 // makes seconds strip complete in a single second, for testing
-// #define FAST_MODE
+#define FAST_MODE
 
 #ifdef FULL_MODE
 constexpr uint MINUTES_STRIP_COUNT = 60;
@@ -30,7 +30,7 @@ constexpr bool SECONDS_FORWARD = false;
 #endif
 
 #ifdef FAST_MODE
-constexpr uint WAIT_TIME = 1000 / SECONDS_STRIP_COUNT;
+constexpr uint WAIT_TIME = 1000 / 60 * 60 / SECONDS_STRIP_COUNT;
 #else
 constexpr uint WAIT_TIME = 1000 * 60 / SECONDS_STRIP_COUNT;
 #endif
