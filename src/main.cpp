@@ -11,20 +11,20 @@
 #ifdef FULL_MODE
 constexpr uint MINUTES_STRIP_COUNT = 60;
 constexpr uint SECONDS_STRIP_COUNT = 60;
-constexpr bool MINUTES_FORWARD = true;
-constexpr bool SECONDS_FORWARD = true;
+#define MINUTES_FORWARD
+#define SECONDS_FORWARD
 #else
 #ifdef QUAD_MODE
 constexpr uint MINUTES_STRIP_COUNT = 60;
 constexpr uint SECONDS_STRIP_COUNT = 60;
-constexpr bool MINUTES_FORWARD = true;
-constexpr bool SECONDS_FORWARD = true;
+#define MINUTES_FORWARD
+#define SECONDS_FORWARD
 #else
 #ifdef SMALL_MODE
 constexpr uint MINUTES_STRIP_COUNT = 8;
 constexpr uint SECONDS_STRIP_COUNT = 8;
-constexpr bool MINUTES_FORWARD = false;
-constexpr bool SECONDS_FORWARD = false;
+#undef MINUTES_FORWARD
+#undef SECONDS_FORWARD
 #endif
 #endif
 #endif
@@ -58,7 +58,7 @@ int prevSecPos;
 int minPos;
 int prevMinPos;
 
-bool fill = false;
+bool fill = true;
 
 uint hueBase = 0;
 
@@ -79,20 +79,20 @@ void setup() {
   secStrip.fill();
   secStrip.show();
 
-  if (SECONDS_FORWARD) {
-    secPos = -1;
-    prevSecPos = secStrip.numPixels() - 1;
-  } else {
-    secPos = secStrip.numPixels() - 1;
-    prevSecPos = 0;
-  }
-  if (MINUTES_FORWARD) {
-    minPos = 0;
-    prevMinPos = minStrip.numPixels() - 1;
-  } else {
-    minPos = minStrip.numPixels() - 1;
-    prevMinPos = 0;
-  }
+  #ifdef SECONDS_FORWARD
+  secPos = -1;
+  prevSecPos = secStrip.numPixels() - 1;
+  #else
+  secPos = secStrip.numPixels() - 1;
+  prevSecPos = 0;
+  #endif
+  #ifdef MINUTES_FORWARD
+  minPos = 0;
+  prevMinPos = minStrip.numPixels() - 1;
+  #else
+  minPos = minStrip.numPixels() - 1;
+  prevMinPos = 0;
+  #endif
 }
 
 void loop() {
@@ -101,38 +101,40 @@ void loop() {
   if (now - lastUpdate > WAIT_TIME) {
     lastUpdate = now;
     prevSecPos = secPos;
-    if (SECONDS_FORWARD) {
-      secPos += 1;
-      if (secPos >= secStrip.numPixels()) {
-        secPos = 0;
-        secStrip.clear();
-        updateMinutes = true;
-      }
-    } else {
-      secPos -= 1;
-      if (secPos < 0) {
-        secPos = secStrip.numPixels() - 1;
-        secStrip.clear();
-        updateMinutes = true;
-      }
+
+    #ifdef SECONDS_FORWARD
+    secPos += 1;
+    if (secPos >= secStrip.numPixels()) {
+      secPos = 0;
+      secStrip.clear();
+      updateMinutes = true;
     }
+    #else
+    secPos -= 1;
+    if (secPos < 0) {
+      secPos = secStrip.numPixels() - 1;
+      secStrip.clear();
+      updateMinutes = true;
+    }
+    #endif
 
     if (updateMinutes) {
       updateMinutes = false;
       prevMinPos = minPos;
-      if (MINUTES_FORWARD) {
-        minPos += 1;
-        if (minPos >= minStrip.numPixels()) {
-          minPos = 0;
-          minStrip.clear();
-        }
-      } else {
-        minPos -= 1;
-        if (minPos < 0) {
-          minPos = minStrip.numPixels() - 1;
-          minStrip.clear();
-        }
+
+      #ifdef MINUTES_FORWARD
+      minPos += 1;
+      if (minPos >= minStrip.numPixels()) {
+        minPos = 0;
+        minStrip.clear();
       }
+      #else
+      minPos -= 1;
+      if (minPos < 0) {
+        minPos = minStrip.numPixels() - 1;
+        minStrip.clear();
+      }
+      #endif
     }
 
     hueBase += 256;
