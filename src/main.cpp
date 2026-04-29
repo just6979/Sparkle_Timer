@@ -58,7 +58,11 @@ int prevSecPos;
 int minPos;
 int prevMinPos;
 
-bool fill = true;
+enum MODES {
+  DROP,
+  FILL,
+  EMPTY
+} mode = FILL;
 
 uint hueBase = 0;
 
@@ -147,7 +151,7 @@ void loop() {
     minStrip.setPixelColor(minPos, color);
     minStrip.show();
 
-    if (!fill) {
+    if (mode == DROP) {
       delay(switchTime);
       secStrip.setPixelColor(prevSecPos, 0);
       secStrip.show();
