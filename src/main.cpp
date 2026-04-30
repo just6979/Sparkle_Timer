@@ -1,77 +1,87 @@
 #include <Adafruit_NeoPixel.h>
 
-// sets pixel count and direction for some strips/matrices used in testing
-// #define FULL_MODE
-// #define QUAD_MODE
+// sets pixel count and direction for some strands/matrices used in testing
 #define SMALL_MODE
+// #define QUAD_MODE
 
-// makes seconds strip complete in a single second, for testing
+// for testing, 60x speed up, cycle the entire seconds strand in 1 second
 // #define FAST_MODE
 
-#ifdef FULL_MODE
-constexpr uint MINUTES_STRIP_COUNT = 60;
-constexpr uint SECONDS_STRIP_COUNT = 60;
-#define MINUTES_FORWARD
-#define SECONDS_FORWARD
-#else
-#ifdef QUAD_MODE
-constexpr uint MINUTES_STRIP_COUNT = 60;
-constexpr uint SECONDS_STRIP_COUNT = 60;
-#define MINUTES_FORWARD
-#define SECONDS_FORWARD
-#else
 #ifdef SMALL_MODE
-constexpr uint MINUTES_STRIP_COUNT = 8;
-constexpr uint SECONDS_STRIP_COUNT = 8;
+// for the small 8 LED strands used for testing
+constexpr uint MINUTES_STRAND_COUNT = 8;
+constexpr uint SECONDS_STRAND_COUNT = 8;
 #undef MINUTES_FORWARD
 #undef SECONDS_FORWARD
-#endif
-#endif
-#endif
-
-#ifdef FAST_MODE
-constexpr uint WAIT_TIME = 1000 / 60 * 60 / SECONDS_STRIP_COUNT;
 #else
-constexpr uint WAIT_TIME = 1000 * 60 / SECONDS_STRIP_COUNT;
+
+#ifdef QUAD_MODE
+// for the 8x8 LED "strands" used for testing, but only use 60 of the 64 LEDS
+constexpr uint MINUTES_STRAND_COUNT = 60;
+constexpr uint SECONDS_STRAND_COUNT = 60;
+#define MINUTES_FORWARD
+#define SECONDS_FORWARD
+#else
+
+// for the full 60 LED strands for the final product
+constexpr uint MINUTES_STRAND_COUNT = 60;
+constexpr uint SECONDS_STRAND_COUNT = 60;
+#define MINUTES_FORWARD
+#define SECONDS_FORWARD
+
+#endif
 #endif
 
-constexpr uint MINUTES_STRIP_PIN = 32;
-constexpr uint SECONDS_STRIP_PIN = 33;
+#ifndef FAST_MODE
+// take 60 seconds to cycle the seconds strand, no matter the size
+constexpr uint WAIT_TIME = 1000 * 60 / SECONDS_STRAND_COUNT;
+#else
+// take 1 second to cycle the seconds strand, no matter the size, for testing
+constexpr uint WAIT_TIME = 1000 / 60 * 60 / SECONDS_STRAND_COUNT;
+#endif
 
-constexpr uint MINUTES_STRIP_BRIGHT = 5;
-constexpr uint SECONDS_STRIP_BRIGHT = 5;
+// pins the strands are connected to
+constexpr uint MINUTES_STRAND_PIN = 32;
+constexpr uint SECONDS_STRAND_PIN = 33;
+// per strand overall brightness
+constexpr uint MINUTES_STRAND_BRIGHT = 5;
+constexpr uint SECONDS_STRAND_BRIGHT = 5;
+// the strands themselves
+Adafruit_NeoPixel minutesStrand(MINUTES_STRAND_COUNT, MINUTES_STRAND_PIN);
+Adafruit_NeoPixel secondsStrand(SECONDS_STRAND_COUNT, SECONDS_STRAND_PIN);
 
-Adafruit_NeoPixel minStrip(
-  MINUTES_STRIP_COUNT, MINUTES_STRIP_PIN, NEO_GRB + NEO_KHZ800
-);
-Adafruit_NeoPixel secStrip(
-  SECONDS_STRIP_COUNT, SECONDS_STRIP_PIN, NEO_GRB + NEO_KHZ800
-);
-
-ulong now;
-uint lastUpdate = 0;
-uint switchTime = 25;
-
-bool updateMinutes = false;
-int secPos;
-int prevSecPos;
-int minPos;
-int prevMinPos;
-
-int secRemain = SECONDS_STRIP_COUNT;
-int minRemain = MINUTES_STRIP_COUNT / 2;
-
-bool alertActive = false;
-int alertCount = 10;
-
+// modes defining how the strands act
 enum MODES {
-  DROP,
-  // FILL,
-  DRAIN,
-  ALERT
+  DRAIN, // fill the strands then remove lit pixels from the top
+  // DRAIN_DROP, // drop a pixel from the bottom of the filled section
+  // FILL, // start empty and light pixels up
+  // FILL_DROP, // drop a pixel from the top down to fill the strand
+  // FILL_SHOOT, // fire a pixel from the bottom up to fill the strand
+  DROP, // drop a single pixel top to bottom
+  // SHOOT, // fire a single pixel up each strand
+  ALERT // flash strands to indicate time is up
 } mode = DRAIN;
 
+// main timing
+ulong now;
+uint lastUpdate = 0;
+
+// drain mode vars
+int secondsRemaining = SECONDS_STRAND_COUNT;
+int minutesRemaining = MINUTES_STRAND_COUNT / 2;
+
+// drop mode vars
+bool shouldUpdateMinutes = false;
+int secondsPosition;
+int prevSecondsPosition;
+int minutesPosition;
+int prevMinutesPosition;
+uint switchTime = 25;
 uint hueBase = 0;
+
+// alert mode vars
+bool alertActive = false;
+int alertCount = 10;
 
 void setup() {
   Serial.begin(115200);
@@ -80,39 +90,39 @@ void setup() {
   }
   Serial.println("Setting up");
 
-  minStrip.begin();
-  minStrip.setBrightness(MINUTES_STRIP_BRIGHT);
-  minStrip.fill();
-  minStrip.show();
+  minutesStrand.begin();
+  minutesStrand.setBrightness(MINUTES_STRAND_BRIGHT);
+  minutesStrand.fill();
+  minutesStrand.show();
 
-  secStrip.begin();
-  secStrip.setBrightness(SECONDS_STRIP_BRIGHT);
-  secStrip.fill();
-  secStrip.show();
+  secondsStrand.begin();
+  secondsStrand.setBrightness(SECONDS_STRAND_BRIGHT);
+  secondsStrand.fill();
+  secondsStrand.show();
 
   if (mode == DRAIN) {
-    secStrip.clear();
-    minStrip.clear();
-    secStrip.fill(0xFFFFFF, 0, secRemain);
-    minStrip.fill(0xFFFFFF, 0, minRemain);
-    secStrip.show();
-    minStrip.show();
+    secondsStrand.clear();
+    minutesStrand.clear();
+    secondsStrand.fill(0xFFFFFF, 0, secondsRemaining);
+    minutesStrand.fill(0xFFFFFF, 0, minutesRemaining);
+    secondsStrand.show();
+    minutesStrand.show();
   }
 
   if (mode == DROP) {
     #ifdef SECONDS_FORWARD
-    secPos = -1;
-    prevSecPos = secStrip.numPixels() - 1;
+    secondsPosition = -1;
+    prevSecondsPosition = secondsStrand.numPixels() - 1;
     #else
-    secPos = secStrip.numPixels() - 1;
-    prevSecPos = 0;
+    secondsPosition = secondsStrand.numPixels() - 1;
+    prevSecondsPosition = 0;
     #endif
     #ifdef MINUTES_FORWARD
-    minPos = 0;
-    prevMinPos = minStrip.numPixels() - 1;
+    minutesPosition = 0;
+    prevMinutesPosition = minutesStrand.numPixels() - 1;
     #else
-    minPos = minStrip.numPixels() - 1;
-    prevMinPos = 0;
+    minutesPosition = minutesStrand.numPixels() - 1;
+    prevMinutesPosition = 0;
     #endif
   }
 }
@@ -125,97 +135,98 @@ void loop() {
 
     if (mode == ALERT) {
       if (alertCount <= 0) {
-        secStrip.fill(0xFF0000);
-        minStrip.fill(0xFF0000);
-        secStrip.show();
-        minStrip.show();
+        secondsStrand.fill(0xFF0000);
+        minutesStrand.fill(0xFF0000);
+        secondsStrand.show();
+        minutesStrand.show();
         delay(100);
         return;
       }
       alertCount--;
 
       if (alertActive) {
-        secStrip.fill(0xFF0000);
-        minStrip.fill(0xFF0000);
+        secondsStrand.fill(0xFF0000);
+        minutesStrand.fill(0xFF0000);
       } else {
-        secStrip.clear();
-        minStrip.clear();
+        secondsStrand.clear();
+        minutesStrand.clear();
       }
-      secStrip.show();
-      minStrip.show();
+      secondsStrand.show();
+      minutesStrand.show();
       alertActive = !alertActive;
     }
 
     if (mode == DRAIN) {
-      secRemain--;
-      secStrip.clear();
-      minStrip.clear();
-      secStrip.fill(0xFFFFFF, 0, secRemain);
-      minStrip.fill(0xFFFFFF, 0, minRemain);
-      secStrip.show();
-      minStrip.show();
-      if (secRemain <= 0) {
-        secRemain = SECONDS_STRIP_COUNT;
-        minRemain--;
+      secondsRemaining--;
+      secondsStrand.clear();
+      minutesStrand.clear();
+      secondsStrand.fill(0xFFFFFF, 0, secondsRemaining);
+      minutesStrand.fill(0xFFFFFF, 0, minutesRemaining);
+      secondsStrand.show();
+      minutesStrand.show();
+      if (secondsRemaining <= 0) {
+        secondsRemaining = SECONDS_STRAND_COUNT;
+        minutesRemaining--;
       }
-      if (minRemain <= 0) {
+      if (minutesRemaining <= 0) {
         mode = ALERT;
       }
     }
 
     if (mode == DROP) {
-      prevSecPos = secPos;
+      prevSecondsPosition = secondsPosition;
 
       #ifdef SECONDS_FORWARD
-      secPos += 1;
-      if (secPos >= secStrip.numPixels()) {
-        secPos = 0;
-        secStrip.clear();
-        updateMinutes = true;
+      secondsPosition += 1;
+      if (secondsPosition >= secondsStrand.numPixels()) {
+        secondsPosition = 0;
+        secondsStrand.clear();
+        shouldUpdateMinutes = true;
       }
       #else
-      secPos -= 1;
-      if (secPos < 0) {
-        secPos = secStrip.numPixels() - 1;
-        secStrip.clear();
-        updateMinutes = true;
+      secondsPosition -= 1;
+      if (secondsPosition < 0) {
+        secondsPosition = secondsStrand.numPixels() - 1;
+        secondsStrand.clear();
+        shouldUpdateMinutes = true;
       }
       #endif
 
-      if (updateMinutes) {
-        updateMinutes = false;
-        prevMinPos = minPos;
+      if (shouldUpdateMinutes) {
+        shouldUpdateMinutes = false;
+        prevMinutesPosition = minutesPosition;
 
         #ifdef MINUTES_FORWARD
-        minPos += 1;
-        if (minPos >= minStrip.numPixels()) {
-          minPos = 0;
-          minStrip.clear();
+        minutesPosition += 1;
+        if (minutesPosition >= minutesStrand.numPixels()) {
+          minutesPosition = 0;
+          minutesStrand.clear();
         }
         #else
-        minPos -= 1;
-        if (minPos < 0) {
-          minPos = minStrip.numPixels() - 1;
-          minStrip.clear();
+        minutesPosition -= 1;
+        if (minutesPosition < 0) {
+          minutesPosition = minutesStrand.numPixels() - 1;
+          minutesStrand.clear();
         }
         #endif
       }
 
       hueBase += 256;
-      const uint secHue = hueBase + secPos * 65536 / minStrip.numPixels();
+      const uint secHue = hueBase + secondsPosition * 65536 / minutesStrand.
+                          numPixels();
       const uint color = Adafruit_NeoPixel::gamma32(
         Adafruit_NeoPixel::ColorHSV(secHue)
       );
-      secStrip.setPixelColor(secPos, color);
-      secStrip.show();
-      minStrip.setPixelColor(minPos, color);
-      minStrip.show();
+      secondsStrand.setPixelColor(secondsPosition, color);
+      secondsStrand.show();
+      minutesStrand.setPixelColor(minutesPosition, color);
+      minutesStrand.show();
 
       delay(switchTime);
-      secStrip.setPixelColor(prevSecPos, 0);
-      secStrip.show();
-      minStrip.setPixelColor(prevMinPos, 0);
-      minStrip.show();
+      secondsStrand.setPixelColor(prevSecondsPosition, 0);
+      secondsStrand.show();
+      minutesStrand.setPixelColor(prevMinutesPosition, 0);
+      minutesStrand.show();
     }
   }
 }
