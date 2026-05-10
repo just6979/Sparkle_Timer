@@ -1,4 +1,8 @@
 #include <Adafruit_NeoPixel.h>
+#include <Arduino.h>
+#include <secrets.h>
+#include <time.h>
+#include <WiFi.h>
 
 // sets pixel count and direction for some strands/matrices used in testing
 #define SMALL_MODE
@@ -32,14 +36,6 @@ constexpr uint SECONDS_STRAND_COUNT = 60;
 #endif
 #endif
 
-#ifndef FAST_MODE
-// take 60 seconds to cycle the seconds strand, no matter the size
-constexpr uint WAIT_TIME = 1000 * 60 / SECONDS_STRAND_COUNT;
-#else
-// take 1 second to cycle the seconds strand, no matter the size, for testing
-constexpr uint WAIT_TIME = 1000 / 60 * 60 / SECONDS_STRAND_COUNT;
-#endif
-
 // pins the strands are connected to
 constexpr uint MINUTES_STRAND_PIN = 32;
 constexpr uint SECONDS_STRAND_PIN = 33;
@@ -50,27 +46,43 @@ constexpr uint SECONDS_STRAND_BRIGHT = 5;
 Adafruit_NeoPixel minutesStrand(MINUTES_STRAND_COUNT, MINUTES_STRAND_PIN);
 Adafruit_NeoPixel secondsStrand(SECONDS_STRAND_COUNT, SECONDS_STRAND_PIN);
 
-// modes defining how the strands act
-enum MODES {
-  DRAIN, // fill the strands then remove lit pixels from the top
-  // DRAIN_DROP, // drop a pixel from the bottom of the filled section
-  // FILL, // start empty and light pixels up
-  // FILL_DROP, // drop a pixel from the top down to fill the strand
-  // FILL_SHOOT, // fire a pixel from the bottom up to fill the strand
-  DROP, // drop a single pixel top to bottom
-  // SHOOT, // fire a single pixel up each strand
-  ALERT // flash strands to indicate time is up
-} mode = DRAIN;
+// datetime settings
+constexpr int TIMEZONE_OFFSET = -18000;
+constexpr bool IS_DST = true;
+constexpr int DST_OFFSET = IS_DST ? 3600 : 0;
+constexpr auto ISO_DATETIME_FMT = "%FT%T";
+constexpr auto NTP_SERVER = "pool.ntp.org";
+tm timeInfo;
+char timeString[20];
 
-// main timing
+// main loop timing
 ulong now;
 uint lastUpdate = 0;
+#ifndef FAST_MODE
+// take 60 seconds to cycle the seconds strand, no matter the size
+constexpr uint WAIT_TIME = 1000 * 60 / SECONDS_STRAND_COUNT;
+#else
+// take 1 second to cycle the seconds strand, no matter the size, for testing
+constexpr uint WAIT_TIME = 1000 / 60 * 60 / SECONDS_STRAND_COUNT;
+#endif
 
-// drain mode vars
+// modes defining how the strands act
+enum MODES {
+  DRAIN,      // fill the strands then remove lit pixels from the top
+  // DRAIN_DROP, // drop a pixel from the bottom of the filled section
+  // FILL,       // start empty and light pixels up
+  // FILL_DROP,  // drop a pixel from the top down to fill the strand
+  // FILL_SHOOT, // fire a pixel from the bottom up to fill the strand
+  DROP,       // drop a single pixel top to bottom
+  // SHOOT,      // fire a single pixel up each strand
+  ALERT       // flash strands to indicate time is up
+} mode = DRAIN;
+
+// drain mode settings
 int secondsRemaining = SECONDS_STRAND_COUNT;
 int minutesRemaining = MINUTES_STRAND_COUNT / 2;
 
-// drop mode vars
+// drop mode settings
 bool shouldUpdateMinutes = false;
 int secondsPosition;
 int prevSecondsPosition;
@@ -79,7 +91,7 @@ int prevMinutesPosition;
 uint switchTime = 25;
 uint hueBase = 0;
 
-// alert mode vars
+// alert mode settings
 bool alertActive = false;
 int alertCount = 10;
 
@@ -88,8 +100,30 @@ void setup() {
   while (!Serial) {
     delay(10);
   }
-  Serial.println("Setting up");
+  delay(100);
+  Serial.println("Initializing system");
 
+  Serial.print("Initializing WiFi");
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
+
+  Serial.println("Getting current time");
+  configTime(TIMEZONE_OFFSET, DST_OFFSET, NTP_SERVER);
+  // (UTC offset, Daylight offset, Server)
+
+  if (getLocalTime(&timeInfo)) {
+    strftime(timeString, 20, ISO_DATETIME_FMT, &timeInfo);
+    Serial.printf("Current time: %s\n", timeString);
+  } else {
+    Serial.println("Failed to obtain time");
+  }
+
+  Serial.println("Initializing strands");
   minutesStrand.begin();
   minutesStrand.setBrightness(MINUTES_STRAND_BRIGHT);
   minutesStrand.fill();
@@ -125,6 +159,8 @@ void setup() {
     prevMinutesPosition = 0;
     #endif
   }
+
+  Serial.println("Running");
 }
 
 void loop() {
