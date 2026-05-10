@@ -241,8 +241,7 @@ void loop() {
         #else
         minutesPosition -= 1;
         if (minutesPosition < 0) {
-          minutesPosition = minutesStrand.numPixels() - 1;
-          minutesStrand.clear();
+          mode = ALERT;
         }
         #endif
       }
