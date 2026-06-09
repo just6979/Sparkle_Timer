@@ -3,13 +3,28 @@
 #include <secrets.h>
 #include <time.h>
 #include <WiFi.h>
+#include <WiFiNTP.h>
+
+// time to count down to (24 hour time); default: 8:01 AM
+constexpr int alarm_hour = 8;
+constexpr int alarm_minutes = 1;
+// start counting X minutes before the alarm
+constexpr int countdown_minutes = 30;
+// how long to run the alert for before going back to sleep
+constexpr int alert_minutes = 5;
+// how long to wake up before the countdown to sync the time
+constexpr int warmup_minutes = 15;
 
 // sets pixel count and direction for some strands/matrices used in testing
 #define SMALL_MODE
 // #define QUAD_MODE
 
 // for testing, 60x speed up, cycle the entire seconds strand in 1 second
-// #define FAST_MODE
+#define FAST_MODE
+
+// for testing, don't get the real time,
+// just set it so as to start the countdown immediately
+#define START_NOW
 
 #ifdef SMALL_MODE
 // for the small 8 LED strands used for testing
@@ -37,8 +52,8 @@ constexpr uint SECONDS_STRAND_COUNT = 60;
 #endif
 
 // pins the strands are connected to
-constexpr uint MINUTES_STRAND_PIN = 32;
-constexpr uint SECONDS_STRAND_PIN = 33;
+constexpr uint MINUTES_STRAND_PIN = 15;
+constexpr uint SECONDS_STRAND_PIN = 14;
 // per strand overall brightness
 constexpr uint MINUTES_STRAND_BRIGHT = 5;
 constexpr uint SECONDS_STRAND_BRIGHT = 5;
@@ -66,6 +81,10 @@ constexpr uint WAIT_TIME = 1000 * 60 / SECONDS_STRAND_COUNT;
 constexpr uint WAIT_TIME = 1000 / 60 * 60 / SECONDS_STRAND_COUNT;
 #endif
 
+// countdown settings
+constexpr int COUNTDOWN_MINUTES = 30;
+constexpr int COUNTDOWN_SECONDS = 0;
+
 // modes defining how the strands act
 enum MODES {
   DRAIN,      // fill the strands then remove lit pixels from the top
@@ -75,12 +94,13 @@ enum MODES {
   // FILL_SHOOT, // fire a pixel from the bottom up to fill the strand
   DROP,       // drop a single pixel top to bottom
   // SHOOT,      // fire a single pixel up each strand
-  ALERT       // flash strands to indicate time is up
+  ALERT,         // flash strands to indicate time is up
+SLEEP            // sleep until X minutes before the next wake time
 } mode = DRAIN;
 
 // drain mode settings
-int secondsRemaining = SECONDS_STRAND_COUNT;
-int minutesRemaining = MINUTES_STRAND_COUNT / 2;
+int secondsRemaining = COUNTDOWN_SECONDS;
+int minutesRemaining = COUNTDOWN_MINUTES;
 
 // drop mode settings
 bool shouldUpdateMinutes = false;
@@ -95,6 +115,32 @@ uint hueBase = 0;
 bool alertActive = false;
 int alertCount = 10;
 
+void init_drain() {
+  secondsStrand.clear();
+  minutesStrand.clear();
+  secondsStrand.fill(0xFFFFFF, 0, secondsRemaining);
+  minutesStrand.fill(0xFFFFFF, 0, minutesRemaining);
+  secondsStrand.show();
+  minutesStrand.show();
+}
+
+void init_drop() {
+  #ifdef SECONDS_FORWARD
+  secondsPosition = -1;
+  prevSecondsPosition = secondsStrand.numPixels() - 1;
+  #else
+  secondsPosition = secondsStrand.numPixels() - 1;
+  prevSecondsPosition = 0;
+  #endif
+  #ifdef MINUTES_FORWARD
+  minutesPosition = 0;
+  prevMinutesPosition = minutesStrand.numPixels() - 1;
+  #else
+  minutesPosition = minutesStrand.numPixels() - 1;
+  prevMinutesPosition = 0;
+  #endif
+}
+
 void setup() {
   Serial.begin(115200);
   while (!Serial) {
@@ -107,16 +153,30 @@ void setup() {
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
-    delay(500);
+    delay(100);
   }
   Serial.println("");
   Serial.println("WiFi connected");
 
   Serial.println("Getting current time");
-  configTime(TIMEZONE_OFFSET, DST_OFFSET, NTP_SERVER);
-  // (UTC offset, Daylight offset, Server)
+  NTP.begin(NTP_SERVER);
 
-  if (getLocalTime(&timeInfo)) {
+  Serial.println("Waiting for NTP time sync: ");
+  if (NTP.waitSet([]() { Serial.print("."); })) {
+    time_t now = time(nullptr);
+    struct tm timeinfo;
+    gmtime_r(&now, &timeinfo);
+    Serial.print("Current time: ");
+    Serial.print(asctime(&timeinfo));
+    now = time(nullptr);
+
+    // int cur_hour;
+    // int cur_minute;
+    // int cur_seconds;
+    // cur_hour = timeInfo.tm_hour;
+    // cur_minute = timeInfo.tm_min;
+    // cur_seconds = timeInfo.tm_sec;
+
     strftime(timeString, 20, ISO_DATETIME_FMT, &timeInfo);
     Serial.printf("Current time: %s\n", timeString);
   } else {
@@ -135,32 +195,109 @@ void setup() {
   secondsStrand.show();
 
   if (mode == DRAIN) {
-    secondsStrand.clear();
-    minutesStrand.clear();
-    secondsStrand.fill(0xFFFFFF, 0, secondsRemaining);
-    minutesStrand.fill(0xFFFFFF, 0, minutesRemaining);
-    secondsStrand.show();
-    minutesStrand.show();
+    init_drain();
   }
 
   if (mode == DROP) {
-    #ifdef SECONDS_FORWARD
-    secondsPosition = -1;
-    prevSecondsPosition = secondsStrand.numPixels() - 1;
-    #else
-    secondsPosition = secondsStrand.numPixels() - 1;
-    prevSecondsPosition = 0;
-    #endif
-    #ifdef MINUTES_FORWARD
-    minutesPosition = 0;
-    prevMinutesPosition = minutesStrand.numPixels() - 1;
-    #else
-    minutesPosition = minutesStrand.numPixels() - 1;
-    prevMinutesPosition = 0;
-    #endif
+    init_drop();
   }
 
   Serial.println("Running");
+}
+
+void show_alert() {
+  if (alertCount <= 0) {
+    secondsStrand.fill(0xFF0000);
+    minutesStrand.fill(0xFF0000);
+    secondsStrand.show();
+    minutesStrand.show();
+    delay(100);
+  } else {
+    alertCount--;
+  }
+
+  if (alertActive) {
+    secondsStrand.fill(0xFF0000);
+    minutesStrand.fill(0xFF0000);
+  } else {
+    secondsStrand.clear();
+    minutesStrand.clear();
+  }
+  secondsStrand.show();
+  minutesStrand.show();
+  alertActive = !alertActive;
+}
+
+void loop_drain() {
+  secondsRemaining--;
+  secondsStrand.clear();
+  minutesStrand.clear();
+  secondsStrand.fill(0xFFFFFF, 0, secondsRemaining);
+  minutesStrand.fill(0xFFFFFF, 0, minutesRemaining);
+  secondsStrand.show();
+  minutesStrand.show();
+  if (secondsRemaining <= 0) {
+    secondsRemaining = SECONDS_STRAND_COUNT;
+    minutesRemaining--;
+  }
+  if (minutesRemaining <= 0) {
+    mode = ALERT;
+  }
+}
+
+void loop_drop() {
+  prevSecondsPosition = secondsPosition;
+
+  #ifdef SECONDS_FORWARD
+  secondsPosition += 1;
+  if (secondsPosition >= secondsStrand.numPixels()) {
+    secondsPosition = 0;
+    secondsStrand.clear();
+    shouldUpdateMinutes = true;
+  }
+  #else
+  secondsPosition -= 1;
+  if (secondsPosition < 0) {
+    secondsPosition = secondsStrand.numPixels() - 1;
+    secondsStrand.clear();
+    shouldUpdateMinutes = true;
+  }
+  #endif
+
+  if (shouldUpdateMinutes) {
+    shouldUpdateMinutes = false;
+    prevMinutesPosition = minutesPosition;
+
+    #ifdef MINUTES_FORWARD
+    minutesPosition += 1;
+    if (minutesPosition >= minutesStrand.numPixels()) {
+      minutesPosition = 0;
+      minutesStrand.clear();
+    }
+    #else
+    minutesPosition -= 1;
+    if (minutesPosition < 0) {
+      mode = ALERT;
+    }
+    #endif
+  }
+
+  hueBase += 256;
+  const uint secHue = hueBase + secondsPosition * 65536 / minutesStrand.
+                      numPixels();
+  const uint color = Adafruit_NeoPixel::gamma32(
+    Adafruit_NeoPixel::ColorHSV(secHue)
+  );
+  secondsStrand.setPixelColor(secondsPosition, color);
+  secondsStrand.show();
+  minutesStrand.setPixelColor(minutesPosition, color);
+  minutesStrand.show();
+
+  delay(switchTime);
+  secondsStrand.setPixelColor(prevSecondsPosition, 0);
+  secondsStrand.show();
+  minutesStrand.setPixelColor(prevMinutesPosition, 0);
+  minutesStrand.show();
 }
 
 void loop() {
@@ -170,98 +307,19 @@ void loop() {
     lastUpdate = now;
 
     if (mode == ALERT) {
-      if (alertCount <= 0) {
-        secondsStrand.fill(0xFF0000);
-        minutesStrand.fill(0xFF0000);
-        secondsStrand.show();
-        minutesStrand.show();
-        delay(100);
-        return;
-      }
-      alertCount--;
-
-      if (alertActive) {
-        secondsStrand.fill(0xFF0000);
-        minutesStrand.fill(0xFF0000);
-      } else {
-        secondsStrand.clear();
-        minutesStrand.clear();
-      }
-      secondsStrand.show();
-      minutesStrand.show();
-      alertActive = !alertActive;
+      show_alert();
     }
 
     if (mode == DRAIN) {
-      secondsRemaining--;
-      secondsStrand.clear();
-      minutesStrand.clear();
-      secondsStrand.fill(0xFFFFFF, 0, secondsRemaining);
-      minutesStrand.fill(0xFFFFFF, 0, minutesRemaining);
-      secondsStrand.show();
-      minutesStrand.show();
-      if (secondsRemaining <= 0) {
-        secondsRemaining = SECONDS_STRAND_COUNT;
-        minutesRemaining--;
-      }
-      if (minutesRemaining <= 0) {
-        mode = ALERT;
-      }
+      loop_drain();
     }
 
     if (mode == DROP) {
-      prevSecondsPosition = secondsPosition;
+      loop_drop();
+    }
 
-      #ifdef SECONDS_FORWARD
-      secondsPosition += 1;
-      if (secondsPosition >= secondsStrand.numPixels()) {
-        secondsPosition = 0;
-        secondsStrand.clear();
-        shouldUpdateMinutes = true;
-      }
-      #else
-      secondsPosition -= 1;
-      if (secondsPosition < 0) {
-        secondsPosition = secondsStrand.numPixels() - 1;
-        secondsStrand.clear();
-        shouldUpdateMinutes = true;
-      }
-      #endif
+    if (mode == SLEEP) {
 
-      if (shouldUpdateMinutes) {
-        shouldUpdateMinutes = false;
-        prevMinutesPosition = minutesPosition;
-
-        #ifdef MINUTES_FORWARD
-        minutesPosition += 1;
-        if (minutesPosition >= minutesStrand.numPixels()) {
-          minutesPosition = 0;
-          minutesStrand.clear();
-        }
-        #else
-        minutesPosition -= 1;
-        if (minutesPosition < 0) {
-          mode = ALERT;
-        }
-        #endif
-      }
-
-      hueBase += 256;
-      const uint secHue = hueBase + secondsPosition * 65536 / minutesStrand.
-                          numPixels();
-      const uint color = Adafruit_NeoPixel::gamma32(
-        Adafruit_NeoPixel::ColorHSV(secHue)
-      );
-      secondsStrand.setPixelColor(secondsPosition, color);
-      secondsStrand.show();
-      minutesStrand.setPixelColor(minutesPosition, color);
-      minutesStrand.show();
-
-      delay(switchTime);
-      secondsStrand.setPixelColor(prevSecondsPosition, 0);
-      secondsStrand.show();
-      minutesStrand.setPixelColor(prevMinutesPosition, 0);
-      minutesStrand.show();
     }
   }
 }
