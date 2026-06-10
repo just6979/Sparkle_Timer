@@ -1,5 +1,6 @@
 #include <Adafruit_NeoPixel.h>
 #include <Arduino.h>
+#include <ArduinoLog.h>
 #include <secrets.h>
 #include <time.h>
 #include <WiFi.h>
@@ -52,8 +53,8 @@ constexpr uint SECONDS_STRAND_COUNT = 60;
 #endif
 
 // pins the strands are connected to
-constexpr uint MINUTES_STRAND_PIN = 15;
-constexpr uint SECONDS_STRAND_PIN = 14;
+constexpr uint MINUTES_STRAND_PIN = 14;
+constexpr uint SECONDS_STRAND_PIN = 15;
 // per strand overall brightness
 constexpr uint MINUTES_STRAND_BRIGHT = 5;
 constexpr uint SECONDS_STRAND_BRIGHT = 5;
@@ -147,27 +148,28 @@ void setup() {
     delay(10);
   }
   delay(100);
-  Serial.println("Initializing system");
+  Log.begin(LOG_LEVEL_VERBOSE, &Serial);
+  Log.noticeln("Initializing system");
 
-  Serial.print("Initializing WiFi");
+  Log.notice("Initializing WiFi");
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
     delay(100);
   }
   Serial.println("");
-  Serial.println("WiFi connected");
+  Log.noticeln("WiFi connected");
 
-  Serial.println("Getting current time");
+  Log.noticeln("Getting current time");
   NTP.begin(NTP_SERVER);
 
-  Serial.println("Waiting for NTP time sync: ");
-  if (NTP.waitSet([]() { Serial.print("."); })) {
+  Log.noticeln("Waiting for NTP time sync: ");
+  if (NTP.waitSet([]() { Serial.println("."); })) {
     time_t now = time(nullptr);
     struct tm timeinfo;
     gmtime_r(&now, &timeinfo);
-    Serial.print("Current time: ");
-    Serial.print(asctime(&timeinfo));
+    Log.notice("Current time: ");
+    Log.notice(asctime(&timeinfo));
     now = time(nullptr);
 
     // int cur_hour;
@@ -178,12 +180,12 @@ void setup() {
     // cur_seconds = timeInfo.tm_sec;
 
     strftime(timeString, 20, ISO_DATETIME_FMT, &timeInfo);
-    Serial.printf("Current time: %s\n", timeString);
+    Log.notice("Current time: %s\n", timeString);
   } else {
-    Serial.println("Failed to obtain time");
+    Log.noticeln("Failed to obtain time");
   }
 
-  Serial.println("Initializing strands");
+  Log.noticeln("Initializing strands");
   minutesStrand.begin();
   minutesStrand.setBrightness(MINUTES_STRAND_BRIGHT);
   minutesStrand.fill();
@@ -202,7 +204,7 @@ void setup() {
     init_drop();
   }
 
-  Serial.println("Running");
+  Log.noticeln("Running");
 }
 
 void show_alert() {
@@ -319,7 +321,6 @@ void loop() {
     }
 
     if (mode == SLEEP) {
-
     }
   }
 }
