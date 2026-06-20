@@ -144,33 +144,37 @@ void init_drop() {
 
 void setup() {
   Serial.begin(115200);
-  while (!Serial) {
-    delay(10);
-  }
-  delay(100);
+  // wait for serial for monitoring setup
+  // ulong serial_time = millis();
+  // while (!Serial) {
+  //   // but don't wait forever in case a debug build was left on the device
+  //   if (serial_time > 4000) break;
+  //   serial_time = millis();
+  // }
+  // delay(100);
   Log.begin(LOG_LEVEL_VERBOSE, &Serial);
   Log.noticeln("Initializing system");
 
-  Log.notice("Initializing WiFi");
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.print(".");
-    delay(100);
-  }
-  Serial.println("");
-  Log.noticeln("WiFi connected");
-
-  Log.noticeln("Getting current time");
-  NTP.begin(NTP_SERVER);
-
-  Log.noticeln("Waiting for NTP time sync: ");
-  if (NTP.waitSet([]() { Serial.println("."); })) {
-    time_t now = time(nullptr);
-    struct tm timeinfo;
-    gmtime_r(&now, &timeinfo);
-    Log.notice("Current time: ");
-    Log.notice(asctime(&timeinfo));
-    now = time(nullptr);
+  // Log.notice("Initializing WiFi");
+  // WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  // while (WiFi.status() != WL_CONNECTED) {
+  //   Serial.print(".");
+  //   delay(100);
+  // }
+  // Serial.println("");
+  // Log.noticeln("WiFi connected");
+  //
+  // Log.noticeln("Getting current time");
+  // NTP.begin(NTP_SERVER);
+  //
+  // Log.noticeln("Waiting for NTP time sync: ");
+  // if (NTP.waitSet([]() { Serial.print("."); })) {
+  //   time_t now = time(nullptr);
+  //   struct tm timeinfo;
+  //   gmtime_r(&now, &timeinfo);
+  //   Log.notice("Current time: ");
+  //   Log.notice(asctime(&timeinfo));
+  //   now = time(nullptr);
 
     // int cur_hour;
     // int cur_minute;
@@ -179,11 +183,11 @@ void setup() {
     // cur_minute = timeInfo.tm_min;
     // cur_seconds = timeInfo.tm_sec;
 
-    strftime(timeString, 20, ISO_DATETIME_FMT, &timeInfo);
-    Log.notice("Current time: %s\n", timeString);
-  } else {
-    Log.noticeln("Failed to obtain time");
-  }
+  //   strftime(timeString, 20, ISO_DATETIME_FMT, &timeInfo);
+  //   Log.notice("Current time: %s\n", timeString);
+  // } else {
+  //   Log.noticeln("Failed to obtain time");
+  // }
 
   Log.noticeln("Initializing strands");
   minutesStrand.begin();
