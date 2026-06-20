@@ -100,8 +100,10 @@ SLEEP            // sleep until X minutes before the next wake time
 } mode = DRAIN;
 
 // drain mode settings
-int secondsRemaining = COUNTDOWN_SECONDS;
-int minutesRemaining = COUNTDOWN_MINUTES;
+// int secondsRemaining = COUNTDOWN_SECONDS;
+// int minutesRemaining = COUNTDOWN_MINUTES;
+int secondsRemaining = SECONDS_STRAND_COUNT;
+int minutesRemaining = MINUTES_STRAND_COUNT / 2;
 
 // drop mode settings
 bool shouldUpdateMinutes = false;
@@ -213,11 +215,16 @@ void setup() {
 
 void show_alert() {
   if (alertCount <= 0) {
-    secondsStrand.fill(0xFF0000);
-    minutesStrand.fill(0xFF0000);
+    secondsStrand.fill(0xFF00FF);
+    minutesStrand.fill(0xFF00FF);
     secondsStrand.show();
     minutesStrand.show();
-    delay(100);
+    delay(2000);
+    secondsRemaining = SECONDS_STRAND_COUNT;
+    minutesRemaining = MINUTES_STRAND_COUNT / 2;
+    alertCount = 10;
+    mode = DRAIN;
+    alertActive = false;
   } else {
     alertCount--;
   }
