@@ -103,25 +103,25 @@ void setup() {
   delay(100);
   Serial.println("Initializing system");
 
-  Serial.print("Initializing WiFi");
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.print(".");
-    delay(500);
-  }
-  Serial.println("");
-  Serial.println("WiFi connected");
-
-  Serial.println("Getting current time");
-  configTime(TIMEZONE_OFFSET, DST_OFFSET, NTP_SERVER);
-  // (UTC offset, Daylight offset, Server)
-
-  if (getLocalTime(&timeInfo)) {
-    strftime(timeString, 20, ISO_DATETIME_FMT, &timeInfo);
-    Serial.printf("Current time: %s\n", timeString);
-  } else {
-    Serial.println("Failed to obtain time");
-  }
+  // Serial.print("Initializing WiFi");
+  // WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  // while (WiFi.status() != WL_CONNECTED) {
+  //   Serial.print(".");
+  //   delay(500);
+  // }
+  // Serial.println("");
+  // Serial.println("WiFi connected");
+  //
+  // Serial.println("Getting current time");
+  // configTime(TIMEZONE_OFFSET, DST_OFFSET, NTP_SERVER);
+  // // (UTC offset, Daylight offset, Server)
+  //
+  // if (getLocalTime(&timeInfo)) {
+  //   strftime(timeString, 20, ISO_DATETIME_FMT, &timeInfo);
+  //   Serial.printf("Current time: %s\n", timeString);
+  // } else {
+  //   Serial.println("Failed to obtain time");
+  // }
 
   Serial.println("Initializing strands");
   minutesStrand.begin();
